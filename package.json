@@ -1,0 +1,23 @@
+{
+  "name": "prompt-trail",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "prompt-trail": "./dist/cli/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli/index.ts"
+  },
+  "dependencies": {
+    "commander": "^12.1.0",
+    "better-sqlite3": "^9.4.3",
+    "simple-git": "^3.27.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/node": "^20.11.5",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
+  }
+}
