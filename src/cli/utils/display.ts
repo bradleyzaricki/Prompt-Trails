@@ -1,4 +1,4 @@
-import type { PromptEntry } from '../../types/index.js'
+import type { PromptEntry, PromptResponse } from '../../types/index.js'
 
 // ─── ANSI color codes ──────────────────────────────────────────────────────
 
@@ -13,14 +13,20 @@ const CYAN = '\x1b[36m'
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function label(entry: PromptEntry): string {
-  const toolCalls = JSON.parse(entry.tool_calls) as Array<{ tool_name: string }>
-  const hasWriteOps = toolCalls.some(t =>
-    t.tool_name === 'Write' || t.tool_name === 'Edit' || t.tool_name === 'MultiEdit'
-  )
+  // Not yet finalized — still in progress
+  if (entry.finalized === 0) return `${YELLOW}pending${RESET}`
+  // Finalized with no write tools used
+  if (entry.prompt_category === 'question') return `${DIM}question${RESET}`
+  // Finalized with changes
+  if (entry.accepted === 1) return `${GREEN}accepted${RESET}`
+  // Finalized with write tools but no changes stuck
+  return `${RED}not accepted${RESET}`
+}
 
-  if (!hasWriteOps) return `${DIM}question${RESET}`
-  if (entry.accepted === 0) return `${YELLOW}not accepted${RESET}`
-  return `${GREEN}accepted${RESET}`
+function responseStatusLabel(status: string): string {
+  if (status === 'accepted') return `${GREEN}accepted${RESET}`
+  if (status === 'rejected') return `${RED}rejected${RESET}`
+  return `${YELLOW}pending${RESET}`
 }
 
 function colorDiff(diff: string): string {
@@ -53,13 +59,7 @@ export function formatPromptEntry(entry: PromptEntry): string {
   return lines.join('\n')
 }
 
-export function formatPromptEntryDetail(entry: PromptEntry): string {
-  const toolCalls = JSON.parse(entry.tool_calls) as Array<{
-    tool_name: string
-    tool_input: Record<string, unknown>
-    timestamp: string
-  }>
-
+export function formatPromptEntryDetail(entry: PromptEntry, responses?: PromptResponse[]): string {
   const lines: string[] = []
 
   lines.push(`${BOLD}Prompt #${entry.id}${RESET}`)
@@ -69,12 +69,39 @@ export function formatPromptEntryDetail(entry: PromptEntry): string {
   lines.push(`${BOLD}Status:${RESET} ${label(entry)}`)
   lines.push(`${BOLD}Changes:${RESET} ${GREEN}+${entry.lines_added}${RESET} ${RED}-${entry.lines_removed}${RESET} across ${entry.files_changed} files`)
 
-  if (toolCalls.length > 0) {
-    lines.push(`\n${BOLD}Tool calls:${RESET}`)
-    for (const call of toolCalls) {
-      lines.push(`  ${CYAN}${call.tool_name}${RESET} ${DIM}${call.timestamp}${RESET}`)
-      const inputStr = JSON.stringify(call.tool_input)
-      lines.push(`    ${DIM}${inputStr.slice(0, 100)}${inputStr.length > 100 ? '...' : ''}${RESET}`)
+  if (responses && responses.length > 0) {
+    const accepted = responses.filter(r => r.status === 'accepted').length
+    const rejected = responses.filter(r => r.status === 'rejected').length
+    const pending = responses.filter(r => r.status === 'pending').length
+
+    const parts: string[] = []
+    if (accepted > 0) parts.push(`${GREEN}${accepted} accepted${RESET}`)
+    if (rejected > 0) parts.push(`${RED}${rejected} rejected${RESET}`)
+    if (pending > 0) parts.push(`${YELLOW}${pending} pending${RESET}`)
+
+    lines.push(`\n${BOLD}Responses:${RESET} ${parts.join(', ')} of ${responses.length} total`)
+    lines.push(`${DIM}${'─'.repeat(60)}${RESET}`)
+
+    for (const resp of responses) {
+      const input = JSON.parse(resp.tool_input)
+      const filePath = input.file_path ?? input.path ?? ''
+      lines.push(`  ${responseStatusLabel(resp.status)}  ${CYAN}${resp.tool_name}${RESET} ${DIM}${filePath}${RESET}`)
+    }
+  } else {
+    // Fallback to legacy tool_calls if no responses exist
+    const toolCalls = JSON.parse(entry.tool_calls) as Array<{
+      tool_name: string
+      tool_input: Record<string, unknown>
+      timestamp: string
+    }>
+
+    if (toolCalls.length > 0) {
+      lines.push(`\n${BOLD}Tool calls:${RESET}`)
+      for (const call of toolCalls) {
+        lines.push(`  ${CYAN}${call.tool_name}${RESET} ${DIM}${call.timestamp}${RESET}`)
+        const inputStr = JSON.stringify(call.tool_input)
+        lines.push(`    ${DIM}${inputStr.slice(0, 100)}${inputStr.length > 100 ? '...' : ''}${RESET}`)
+      }
     }
   }
 

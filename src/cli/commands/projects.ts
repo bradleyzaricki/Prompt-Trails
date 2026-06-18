@@ -2,6 +2,7 @@ import fs from 'fs'
 import path from 'path'
 import { insertProject, listProjects, deleteProject, getProjectByPath } from '../../db/queries.js'
 
+
 export function runProjectsList(): void {
   const projects = listProjects()
 

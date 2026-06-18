@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs'
-import simpleGit from 'simple-git'
+import { simpleGit } from 'simple-git'
 import type { DiffStats } from '../types/index.js'
 
 function getGit(shadowDir: string, projectPath: string) {
@@ -9,6 +9,7 @@ function getGit(shadowDir: string, projectPath: string) {
     GIT_WORK_TREE: projectPath,
   })
 }
+
 
 export async function initShadowRepo(shadowDir: string, projectPath: string): Promise<void> {
   if (!fs.existsSync(shadowDir)) {
@@ -39,12 +40,14 @@ export async function initShadowRepo(shadowDir: string, projectPath: string): Pr
   }
 }
 
+//Creates a snapshot of the codebase before prompt execution to compare against delta later 
 export async function snapshotBefore(shadowDir: string, projectPath: string): Promise<void> {
   const git = getGit(shadowDir, projectPath)
   await git.add('-A')
   await git.commit('before', [], { '--allow-empty': null })
 }
 
+//Takes a snapshot after a prompt executes to compare against the previous snapshot for a diff
 export async function snapshotAfter(shadowDir: string, projectPath: string): Promise<DiffStats> {
   const git = getGit(shadowDir, projectPath)
   await git.add('-A')

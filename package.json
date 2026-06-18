@@ -10,13 +10,13 @@
     "dev": "tsx src/cli/index.ts"
   },
   "dependencies": {
-    "commander": "^12.1.0",
     "better-sqlite3": "^9.4.3",
+    "commander": "^12.1.0",
     "simple-git": "^3.27.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.8",
-    "@types/node": "^20.11.5",
+    "@types/node": "^20.19.39",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3"
   }

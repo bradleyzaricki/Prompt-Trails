@@ -1,6 +1,8 @@
 #!/usr/bin/env node
-// test
-// test comment
+// comment 1
+// comment 2
+// comment 3
+// comment 4
 import { Command } from 'commander'
 import { runInit } from './commands/init.js'
 import { runRecord } from './commands/record.js'
@@ -9,6 +11,7 @@ import { runLog } from './commands/log.js'
 import { runShow } from './commands/show.js'
 import { runStats } from './commands/stats.js'
 import { runClear } from './commands/clear.js'
+import { runSearch } from './commands/search.js'
 
 const program = new Command()
 
@@ -65,6 +68,13 @@ program
   .command('stats')
   .description('Show summary statistics for the current project')
   .action(runStats)
+
+program
+  .command('search')
+  .description('Full-text search across prompts and diffs')
+  .argument('<query>', 'search query')
+  .option('--project-id <id>', 'search within a specific project')
+  .action((query, options) => runSearch(query, options))
 
 program
   .command('clear')

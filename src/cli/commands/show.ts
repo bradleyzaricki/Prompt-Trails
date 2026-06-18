@@ -1,6 +1,7 @@
-import { getPromptEntry } from '../../db/queries.js'
+import { getPromptEntry, listResponsesForEntry } from '../../db/queries.js'
 import { formatPromptEntryDetail } from '../utils/display.js'
 
+//show details of a single prompt in the project by id
 export function runShow(id: string): void {
   const entryId = parseInt(id, 10)
 
@@ -16,5 +17,6 @@ export function runShow(id: string): void {
     process.exit(1)
   }
 
-  console.log(formatPromptEntryDetail(entry))
+  const responses = listResponsesForEntry(entryId)
+  console.log(formatPromptEntryDetail(entry, responses))
 }
