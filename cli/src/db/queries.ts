@@ -1,15 +1,14 @@
 import type { Project, Session, PromptEntry, PromptResponse } from '../types/index.js'
 import { getDb } from './index.js'
 
-//Projects
+// ─── Projects ─────────────────────────────────────────────────────────────
 
 export function insertProject(name: string, path: string, description?: string): Project {
   const db = getDb()
-  const stmt = db.prepare(`
+  const result = db.prepare(`
     INSERT INTO projects (name, path, description)
     VALUES (?, ?, ?)
-  `)
-  const result = stmt.run(name, path, description ?? null)
+  `).run(name, path, description ?? null)
   return getProjectById(result.lastInsertRowid as number)!
 }
 
@@ -44,7 +43,7 @@ export function updateProjectTimestamp(id: number): void {
   db.prepare(`UPDATE projects SET updated_at = datetime('now') WHERE id = ?`).run(id)
 }
 
-//Sessions
+// ─── Sessions ─────────────────────────────────────────────────────────────
 
 export function getOrCreateSession(projectId: number, claudeSessionId: string): Session {
   const db = getDb()
@@ -63,6 +62,16 @@ export function getOrCreateSession(projectId: number, claudeSessionId: string): 
     .get(result.lastInsertRowid) as Session
 }
 
+export function getClaudeSessionId(promptEntryId: number): string | null {
+  const db = getDb()
+  const row = db.prepare(`
+    SELECT s.claude_session_id FROM sessions s
+    JOIN prompt_entries pe ON pe.session_id = s.id
+    WHERE pe.id = ?
+  `).get(promptEntryId) as { claude_session_id: string } | undefined
+  return row?.claude_session_id ?? null
+}
+
 export function closeSession(claudeSessionId: string): void {
   const db = getDb()
   db.prepare(`
@@ -71,34 +80,35 @@ export function closeSession(claudeSessionId: string): void {
   `).run(claudeSessionId)
 }
 
-//Prompts
+// ─── Prompt Entries ───────────────────────────────────────────────────────
 
 export function insertPromptEntry(
   sessionId: number,
   projectId: number,
   promptText: string,
-  submittedAt: string
+  submittedAt: string,
+  claudeResponse: string = '',
+  promptUuid: string = ''
 ): PromptEntry {
   const db = getDb()
   const result = db.prepare(`
-    INSERT INTO prompt_entries (session_id, project_id, prompt_text, submitted_at)
-    VALUES (?, ?, ?, ?)
-  `).run(sessionId, projectId, promptText, submittedAt)
+    INSERT INTO prompt_entries (session_id, project_id, prompt_text, submitted_at, claude_response, prompt_uuid)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(sessionId, projectId, promptText, submittedAt, claudeResponse, promptUuid)
 
   return db.prepare('SELECT * FROM prompt_entries WHERE id = ?')
     .get(result.lastInsertRowid) as PromptEntry
 }
 
-export function appendToolCall(promptEntryId: number, toolCall: object): void {
+export function getPromptEntry(id: number): PromptEntry | null {
   const db = getDb()
-  const entry = db.prepare('SELECT tool_calls FROM prompt_entries WHERE id = ?')
-    .get(promptEntryId) as { tool_calls: string }
+  return db.prepare('SELECT * FROM prompt_entries WHERE id = ?').get(id) as PromptEntry | null
+}
 
-  const toolCalls = JSON.parse(entry.tool_calls)
-  toolCalls.push(toolCall)
-
-  db.prepare('UPDATE prompt_entries SET tool_calls = ? WHERE id = ?')
-    .run(JSON.stringify(toolCalls), promptEntryId)
+export function updateClaudeResponse(promptEntryId: number, claudeResponse: string): void {
+  const db = getDb()
+  db.prepare('UPDATE prompt_entries SET claude_response = ? WHERE id = ?')
+    .run(claudeResponse, promptEntryId)
 }
 
 export function finalizePromptEntry(
@@ -128,11 +138,6 @@ export function finalizePromptEntry(
     JSON.stringify(fileExtensions), JSON.stringify(languages), promptCategory,
     promptEntryId
   )
-}
-
-export function getPromptEntry(id: number): PromptEntry | null {
-  const db = getDb()
-  return db.prepare('SELECT * FROM prompt_entries WHERE id = ?').get(id) as PromptEntry | null
 }
 
 export function listPromptEntriesForProject(projectId: number, acceptedOnly = false): PromptEntry[] {
@@ -169,43 +174,26 @@ export function searchPromptEntries(query: string, projectId?: number): PromptEn
   `).all(query) as PromptEntry[]
 }
 
-//Prompt Responses
+// ─── Prompt Responses ─────────────────────────────────────────────────────
 
 export function insertPromptResponse(
   promptEntryId: number,
   toolName: string,
-  toolInput: Record<string, unknown>
+  toolInput: Record<string, unknown>,
+  toolUseId: string = '',
+  status: 'pending' | 'accepted' | 'rejected' = 'pending',
+  toolOutput?: string
 ): PromptResponse {
   const db = getDb()
+  const resolvedAt = status !== 'pending' ? new Date().toISOString() : null
+
   const result = db.prepare(`
-    INSERT INTO prompt_responses (prompt_entry_id, tool_name, tool_input)
-    VALUES (?, ?, ?)
-  `).run(promptEntryId, toolName, JSON.stringify(toolInput))
+    INSERT INTO prompt_responses (prompt_entry_id, tool_name, tool_input, tool_use_id, status, tool_output, resolved_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `).run(promptEntryId, toolName, JSON.stringify(toolInput), toolUseId, status, toolOutput ?? null, resolvedAt)
 
   return db.prepare('SELECT * FROM prompt_responses WHERE id = ?')
     .get(result.lastInsertRowid) as PromptResponse
-}
-
-export function resolvePromptResponse(
-  responseId: number,
-  status: 'accepted' | 'rejected',
-  toolOutput: unknown
-): void {
-  const db = getDb()
-  db.prepare(`
-    UPDATE prompt_responses
-    SET status = ?, tool_output = ?, resolved_at = datetime('now')
-    WHERE id = ?
-  `).run(status, JSON.stringify(toolOutput), responseId)
-}
-
-export function getLatestPendingResponse(promptEntryId: number): PromptResponse | null {
-  const db = getDb()
-  return db.prepare(`
-    SELECT * FROM prompt_responses
-    WHERE prompt_entry_id = ? AND status = 'pending'
-    ORDER BY created_at DESC LIMIT 1
-  `).get(promptEntryId) as PromptResponse | null
 }
 
 export function listResponsesForEntry(promptEntryId: number): PromptResponse[] {
@@ -225,11 +213,10 @@ export function resolvePendingResponses(promptEntryId: number, diff: string): vo
     WHERE prompt_entry_id = ? AND status = 'pending'
   `).all(promptEntryId) as PromptResponse[]
 
-  for (const resp of pending) {
-    const isWriteTool = ['Write', 'Edit', 'MultiEdit', 'NotebookEdit'].includes(resp.tool_name)
+  const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit'])
 
-    if (!isWriteTool) {
-      // Read/Grep/Glob/Bash — always accepted (they ran successfully)
+  for (const resp of pending) {
+    if (!WRITE_TOOLS.has(resp.tool_name)) {
       db.prepare(`
         UPDATE prompt_responses SET status = 'accepted', resolved_at = datetime('now')
         WHERE id = ?
@@ -237,22 +224,16 @@ export function resolvePendingResponses(promptEntryId: number, diff: string): vo
       continue
     }
 
-    // For write tools, check if the edit's new_string appears in the diff
     const input = JSON.parse(resp.tool_input)
     const newString = input.new_string as string | undefined
     const filePath = input.file_path as string | undefined
 
     let wasAccepted = false
     if (newString && diff) {
-      // Check if any line from new_string appears in the diff additions
       const newLines = newString.split('\n').filter(l => l.trim().length > 0)
       wasAccepted = newLines.some(line => diff.includes('+' + line) || diff.includes(line))
     } else if (!newString && filePath && diff) {
-      // Write tool (whole file) — check if filename appears in diff
       wasAccepted = diff.includes(filePath)
-    } else if (!diff) {
-      // No diff at all — nothing was accepted
-      wasAccepted = false
     }
 
     db.prepare(`
@@ -261,6 +242,8 @@ export function resolvePendingResponses(promptEntryId: number, diff: string): vo
     `).run(wasAccepted ? 'accepted' : 'rejected', resp.id)
   }
 }
+
+// ─── Stats ────────────────────────────────────────────────────────────────
 
 export function getStatsForProject(projectId: number) {
   const db = getDb()

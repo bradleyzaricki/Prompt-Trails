@@ -9,13 +9,10 @@ export function getPromptTrailDir(): string {
   return path.join(os.homedir(), '.prompt-trail')
 }
 
-//Create a seperate shadow git directory for runtime use only, no need for saving
 export function getShadowGitDir(projectId: number): string {
   return path.join(getPromptTrailDir(), 'shadow', String(projectId))
 }
 
-
-//Returns SQL DB if initialized, otherwise initializes and returns it
 export function getDb(): Database.Database {
   if (db) return db
 
@@ -30,8 +27,6 @@ export function getDb(): Database.Database {
   return db
 }
 
-
-//creates tables if they don't exist
 function migrate(db: Database.Database): void {
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
@@ -56,6 +51,7 @@ function migrate(db: Database.Database): void {
       session_id INTEGER NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       prompt_text TEXT NOT NULL,
+      claude_response TEXT NOT NULL DEFAULT '',
       submitted_at TEXT NOT NULL,
       finalized INTEGER NOT NULL DEFAULT 0,
       accepted INTEGER NOT NULL DEFAULT 0,
@@ -64,10 +60,10 @@ function migrate(db: Database.Database): void {
       files_changed INTEGER NOT NULL DEFAULT 0,
       lines_added INTEGER NOT NULL DEFAULT 0,
       lines_removed INTEGER NOT NULL DEFAULT 0,
-      tool_calls TEXT NOT NULL DEFAULT '[]',
       file_extensions TEXT NOT NULL DEFAULT '[]',
       languages TEXT NOT NULL DEFAULT '[]',
-      prompt_category TEXT NOT NULL DEFAULT 'other'
+      prompt_category TEXT NOT NULL DEFAULT 'other',
+      prompt_uuid TEXT NOT NULL DEFAULT ''
     );
 
     CREATE TABLE IF NOT EXISTS prompt_responses (
@@ -77,6 +73,7 @@ function migrate(db: Database.Database): void {
       tool_input TEXT NOT NULL DEFAULT '{}',
       tool_output TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      tool_use_id TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       resolved_at TEXT
     );

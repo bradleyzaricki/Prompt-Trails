@@ -1,6 +1,5 @@
-import { findProjectForCwd, listPromptEntriesForProject } from '../../db/queries.js'
+import { findProjectForCwd, listPromptEntriesForProject, listResponsesForEntry } from '../../db/queries.js'
 import { formatPromptEntry } from '../utils/display.js'
-import os from 'os'
 
 interface LogOptions {
   accepted?: boolean
@@ -36,7 +35,8 @@ export function runLog(options: LogOptions): void {
   }
 
   for (const entry of entries) {
-    console.log(formatPromptEntry(entry))
+    const responses = listResponsesForEntry(entry.id)
+    console.log(formatPromptEntry(entry, responses.length))
     console.log()
   }
 }

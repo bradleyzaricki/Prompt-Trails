@@ -20,6 +20,7 @@ export interface PromptEntry {
   session_id: number
   project_id: number
   prompt_text: string
+  claude_response: string       // Claude's text response
   submitted_at: string
   finalized: number
   accepted: number
@@ -28,11 +29,25 @@ export interface PromptEntry {
   files_changed: number
   lines_added: number
   lines_removed: number
-  tool_calls: string
-  file_extensions: string       // JSON array of extensions touched, e.g. [".ts", ".json"]
-  languages: string             // JSON array of detected languages, e.g. ["typescript", "json"]
-  prompt_category: string       // "question" | "code_change" | "refactor" | "debug" | "other"
+  file_extensions: string       // JSON array of extensions touched
+  languages: string             // JSON array of detected languages
+  prompt_category: string       // "question" | "code_change" | "command" | "other"
+  prompt_uuid: string           // UUID from conversation log for dedup
 }
+
+export interface PromptResponse {
+  id: number
+  prompt_entry_id: number
+  tool_name: string
+  tool_input: string            // JSON string
+  tool_output?: string          // JSON string
+  status: 'pending' | 'accepted' | 'rejected'
+  tool_use_id: string           // Links to conversation log tool_use_id
+  created_at: string
+  resolved_at?: string
+}
+
+// Hook payloads
 
 export interface UserPromptSubmitPayload {
   hook_event_name: 'UserPromptSubmit'
@@ -41,38 +56,10 @@ export interface UserPromptSubmitPayload {
   prompt: string
 }
 
-export interface PreToolUsePayload {
-  hook_event_name: 'PreToolUse'
-  session_id: string
-  cwd: string
-  tool_name: string
-  tool_input: Record<string, unknown>
-}
-
-export interface PostToolUsePayload {
-  hook_event_name: 'PostToolUse'
-  session_id: string
-  cwd: string
-  tool_name: string
-  tool_input: Record<string, unknown>
-  tool_output: unknown
-}
-
 export interface StopPayload {
   hook_event_name: 'Stop'
   session_id: string
   cwd: string
-}
-
-export interface PromptResponse {
-  id: number
-  prompt_entry_id: number
-  tool_name: string
-  tool_input: string          // JSON string
-  tool_output?: string        // JSON string
-  status: 'pending' | 'accepted' | 'rejected'
-  created_at: string
-  resolved_at?: string
 }
 
 export interface DiffStats {
