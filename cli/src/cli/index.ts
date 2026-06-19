@@ -1,8 +1,4 @@
 #!/usr/bin/env node
-// comment 1
-// comment 2
-// comment 3
-// comment 4
 import { Command } from 'commander'
 import { runInit } from './commands/init.js'
 import { runRecord } from './commands/record.js'

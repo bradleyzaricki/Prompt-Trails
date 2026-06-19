@@ -1,0 +1,43 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(wc -l /Users/bradleyzaricki/prompt-trail-project/src/**/*.ts)",
+      "Bash(prompt-trail record:*)",
+      "Bash(prompt-trail log:*)",
+      "Bash(npm run:*)",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, tool_name, status FROM prompt_responses ORDER BY id DESC LIMIT 10;\")",
+      "Bash(python3 -c \"import sys,json; d=json.loads\\(sys.stdin.read\\(\\)\\); print\\(json.dumps\\(d.get\\('hooks',{}\\), indent=2\\)\\)\")",
+      "Bash(git stash:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m ':*)",
+      "Bash(python3 -c ':*)",
+      "Bash(rm -f ~/.prompt-trail/db.sqlite)",
+      "Bash(node /Users/bradleyzaricki/prompt-trail-project/dist/cli/index.js list)",
+      "Bash(node /Users/bradleyzaricki/prompt-trail-project/dist/cli/index.js --help)",
+      "Bash(node /Users/bradleyzaricki/prompt-trail-project/dist/cli/index.js projects)",
+      "Bash(node /Users/bradleyzaricki/prompt-trail-project/dist/cli/index.js projects list)",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \".schema prompt_entries\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \".schema prompt_responses\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, prompt_text, prompt_category, accepted, files_changed, lines_added, lines_removed FROM prompt_entries ORDER BY id\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, claude_response FROM prompt_entries WHERE id IN \\(2,3,4\\)\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, diff FROM prompt_entries WHERE id = 4\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, prompt_text, claude_response FROM prompt_entries WHERE claude_response != '' OR prompt_text LIKE '%comment 2%' OR prompt_text LIKE '%tracking%' ORDER BY id\")",
+      "Bash(ls -t ~/.claude/projects/-Users-bradleyzaricki-prompt-trail-project/*.jsonl)",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, prompt_text, prompt_category, accepted, files_changed, lines_added, lines_removed, claude_response != '' as has_response FROM prompt_entries ORDER BY id\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT id, prompt_entry_id, tool_name, status, tool_output IS NOT NULL as has_output FROM prompt_responses ORDER BY id\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT claude_response FROM prompt_entries WHERE id = 1\")",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \"SELECT tool_name, tool_output FROM prompt_responses WHERE tool_name = 'AskUserQuestion'\")",
+      "Bash(dotnet --version)",
+      "Bash(sqlite3 ~/.prompt-trail/db.sqlite \".tables\")",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/src /Users/bradleyzaricki/prompt-trail/cli/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/scripts /Users/bradleyzaricki/prompt-trail/cli/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/package.json /Users/bradleyzaricki/prompt-trail/cli/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/package-lock.json /Users/bradleyzaricki/prompt-trail/cli/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/tsconfig.json /Users/bradleyzaricki/prompt-trail/cli/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/.git /Users/bradleyzaricki/prompt-trail/)",
+      "Bash(mv /Users/bradleyzaricki/prompt-trail-project/.claude /Users/bradleyzaricki/prompt-trail/)",
+      "Bash(rm -rf /Users/bradleyzaricki/prompt-trail/.git)"
+    ]
+  }
+}
