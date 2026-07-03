@@ -107,4 +107,21 @@ function migrate(db: Database.Database): void {
       VALUES ('delete', old.id, old.prompt_text, old.diff);
     END;
   `)
+
+  // ─── Sync state (added for server push) ───────────────────────────────────
+  addColumnIfMissing(db, 'projects', 'server_id', 'INTEGER')          // this project's id on the server (needed to map local->server)
+  addColumnIfMissing(db, 'prompt_entries', 'pushed', 'INTEGER NOT NULL DEFAULT 0')
+  addColumnIfMissing(db, 'prompt_entries', 'pushed_at', 'TEXT')       // audit: when it synced
+}
+
+function addColumnIfMissing(
+  db: Database.Database,
+  table: string,
+  column: string,
+  definition: string
+): void {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
+  if (!cols.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`)
+  }
 }

@@ -8,6 +8,8 @@ import { runShow } from './commands/show.js'
 import { runStats } from './commands/stats.js'
 import { runClear } from './commands/clear.js'
 import { runSearch } from './commands/search.js'
+import { runLogin, runWhoami } from './commands/login.js'
+import { runPush } from './commands/push.js'
 
 const program = new Command()
 
@@ -76,5 +78,22 @@ program
   .command('clear')
   .description('Delete all entries for the current project')
   .action(runClear)
+
+program
+  .command('login')
+  .description('Authenticate the CLI with a Prompt Trail token')
+  .option('--url <url>', 'API base URL (defaults to saved or https://localhost:2324)')
+  .option('--token <token>', 'PAT (pt_...); if omitted you are prompted to paste it')
+  .action((options) => runLogin(options))
+
+program
+  .command('push')
+  .description('Push finalized prompts to the server')
+  .action(runPush)
+
+program
+  .command('whoami')
+  .description('Show the currently authenticated user')
+  .action(runWhoami)
 
 program.parse()

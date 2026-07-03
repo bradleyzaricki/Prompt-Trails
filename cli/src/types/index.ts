@@ -5,6 +5,7 @@ export interface Project {
   description?: string
   created_at: string
   updated_at: string
+  server_id?: number            // this project's id on the server (set on first push)
 }
 
 export interface Session {

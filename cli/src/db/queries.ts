@@ -38,6 +38,11 @@ export function findProjectForCwd(cwd: string): Project | null {
   return projects.find(p => cwd.startsWith(p.path)) ?? null
 }
 
+export function setProjectServerId(id: number, serverId: number): void {
+  const db = getDb()
+  db.prepare('UPDATE projects SET server_id = ? WHERE id = ?').run(serverId, id)
+}
+
 export function updateProjectTimestamp(id: number): void {
   const db = getDb()
   db.prepare(`UPDATE projects SET updated_at = datetime('now') WHERE id = ?`).run(id)
@@ -138,6 +143,27 @@ export function finalizePromptEntry(
     JSON.stringify(fileExtensions), JSON.stringify(languages), promptCategory,
     promptEntryId
   )
+}
+
+// ─── Sync / push ──────────────────────────────────────────────────────────
+
+// Finalized entries that haven't been pushed to the server yet, oldest first.
+export function getUnpushedEntries(): PromptEntry[] {
+  const db = getDb()
+  return db.prepare(`
+    SELECT * FROM prompt_entries
+    WHERE finalized = 1 AND (pushed IS NULL OR pushed = 0)
+    ORDER BY submitted_at ASC
+  `).all() as PromptEntry[]
+}
+
+export function markEntryPushed(id: number): void {
+  const db = getDb()
+  db.prepare(`
+    UPDATE prompt_entries
+    SET pushed = 1, pushed_at = datetime('now')
+    WHERE id = ?
+  `).run(id)
 }
 
 export function listPromptEntriesForProject(projectId: number, acceptedOnly = false): PromptEntry[] {

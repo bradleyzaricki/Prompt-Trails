@@ -2,6 +2,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -23,6 +24,26 @@ builder.Services.AddDbContext<AppDbContext>(opt =>
        .UseSnakeCaseNamingConvention());
 
 builder.Services.AddScoped<JwtTokenService>();
+
+// Swagger / OpenAPI — a browsable test page at /swagger with an Authorize button.
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(o =>
+{
+    o.SwaggerDoc("v1", new() { Title = "Prompt Trail API", Version = "v1" });
+
+    // One "Bearer" scheme covers both credentials — paste a PAT (pt_...) or a JWT.
+    var scheme = new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = Microsoft.OpenApi.Models.SecuritySchemeType.Http,
+        Scheme = "bearer",
+        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
+        Description = "Paste a PAT (pt_...) or a JWT. Swagger adds the 'Bearer ' prefix for you.",
+        Reference = new() { Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme, Id = "Bearer" },
+    };
+    o.AddSecurityDefinition("Bearer", scheme);
+    o.AddSecurityRequirement(new() { [scheme] = Array.Empty<string>() });
+});
 
 var jwt = cfg.GetSection("Jwt");
 builder.Services.AddAuthentication(o =>
@@ -66,6 +87,14 @@ builder.Services.AddAuthentication(o =>
 builder.Services.AddAuthorization();
 
 var app = builder.Build();
+
+// Serve the OpenAPI doc + Swagger UI (dev only).
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI(o => o.SwaggerEndpoint("/swagger/v1/swagger.json", "Prompt Trail API v1"));
+}
+
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -177,6 +206,139 @@ app.MapGet("/api/me", (ClaimsPrincipal me) => Results.Ok(new
     name = me.FindFirst("name")?.Value,
 })).RequireAuthorization();
 
+// ── Ingest ───────────────────────────────────────────────────────────────────
+// Works for both JWT (web) and PAT (CLI). userId always comes from the token, never the body.
+static long CurrentUserId(ClaimsPrincipal me) =>
+    long.Parse(me.FindFirst(JwtRegisteredClaimNames.Sub)!.Value);
+
+// List MY projects.
+app.MapGet("/api/projects", async (ClaimsPrincipal me, AppDbContext db) =>
+{
+    var userId = CurrentUserId(me);
+    var projects = await db.Projects
+        .Where(p => p.OwnerId == userId)
+        .OrderByDescending(p => p.CreatedAt)
+        .Select(p => new { p.Id, p.Name, p.Description, p.CreatedAt })
+        .ToListAsync();
+    return Results.Ok(projects);
+}).RequireAuthorization();
+
+// Create a project. The CLI calls this the first time it sees a new local folder, stores the
+// returned id locally, and sends it on every push. No path is ever sent to the server.
+app.MapPost("/api/projects", async (CreateProjectRequest req, ClaimsPrincipal me, AppDbContext db) =>
+{
+    if (string.IsNullOrWhiteSpace(req.Name))
+        return Results.BadRequest(new { error = "name is required" });
+
+    var project = new Project
+    {
+        OwnerId = CurrentUserId(me),
+        Name = req.Name.Trim(),
+        Description = req.Description,
+    };
+    db.Projects.Add(project);
+    await db.SaveChangesAsync();
+    return Results.Ok(new { project.Id, project.Name, project.Description, project.CreatedAt });
+}).RequireAuthorization();
+
+// Ingest one finalized prompt + its tool trail. Idempotent on promptUuid so a CLI retry
+// can't double-write. Session is upserted by agentSessionId.
+app.MapPost("/api/prompts", async (IngestPromptRequest req, ClaimsPrincipal me, AppDbContext db) =>
+{
+    var userId = CurrentUserId(me);
+
+    if (string.IsNullOrWhiteSpace(req.PromptUuid))
+        return Results.BadRequest(new { error = "promptUuid is required" });
+    if (string.IsNullOrWhiteSpace(req.AgentSessionId))
+        return Results.BadRequest(new { error = "agentSessionId is required" });
+
+    // Idempotency: a row with this uuid already exists → no-op, return it.
+    var existing = await db.PromptEntries
+        .Where(p => p.PromptUuid == req.PromptUuid)
+        .Select(p => new { p.Id })
+        .SingleOrDefaultAsync();
+    if (existing is not null)
+        return Results.Ok(new { id = existing.Id, deduped = true });
+
+    // The project must belong to the caller (prevents writing into someone else's project).
+    var project = await db.Projects.SingleOrDefaultAsync(p => p.Id == req.ProjectId && p.OwnerId == userId);
+    if (project is null)
+        return Results.BadRequest(new { error = "unknown or unauthorized projectId" });
+
+    // Upsert the session by its agent-supplied id.
+    var session = await db.Sessions.SingleOrDefaultAsync(s => s.AgentSessionId == req.AgentSessionId);
+    if (session is null)
+    {
+        session = new Session
+        {
+            UserId = userId,
+            ProjectId = project.Id,
+            AgentSessionId = req.AgentSessionId,
+            StartedAt = req.SubmittedAt,
+        };
+        db.Sessions.Add(session);
+    }
+    else if (session.UserId != userId)
+    {
+        return Results.BadRequest(new { error = "session belongs to another user" });
+    }
+
+    var entry = new PromptEntry
+    {
+        Session = session,
+        PromptUuid = req.PromptUuid,
+        PromptText = req.PromptText ?? "",
+        AssistantResponse = req.AssistantResponse ?? "",
+        SubmittedAt = req.SubmittedAt,
+        Category = string.IsNullOrWhiteSpace(req.Category) ? "other" : req.Category,
+        Diff = req.Diff,
+        FilesChanged = req.FilesChanged,
+        LinesAdded = req.LinesAdded,
+        LinesRemoved = req.LinesRemoved,
+        FileExtensions = req.FileExtensions ?? new(),
+        Languages = req.Languages ?? new(),
+        Responses = (req.Responses ?? new()).Select(r => new PromptResponse
+        {
+            ToolName = r.ToolName,
+            ToolInput = r.ToolInput?.GetRawText() ?? "{}",   // JSON object on the wire -> jsonb text
+            ToolOutput = r.ToolOutput?.GetRawText(),
+            Status = string.IsNullOrWhiteSpace(r.Status) ? "pending" : r.Status,
+            ToolUseId = r.ToolUseId ?? "",
+            ResolvedAt = r.ResolvedAt,
+        }).ToList(),
+    };
+    db.PromptEntries.Add(entry);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { id = entry.Id, sessionId = session.Id, deduped = false });
+}).RequireAuthorization();
+
 app.Run();
 
 record CliTokenRequest(string? Label);
+
+record CreateProjectRequest(string Name, string? Description);
+
+record IngestPromptRequest(
+    long ProjectId,
+    string AgentSessionId,
+    string PromptUuid,
+    string? PromptText,
+    string? AssistantResponse,
+    DateTimeOffset SubmittedAt,
+    string? Category,
+    string? Diff,
+    int FilesChanged,
+    int LinesAdded,
+    int LinesRemoved,
+    List<string>? FileExtensions,
+    List<string>? Languages,
+    List<IngestResponseItem>? Responses);
+
+record IngestResponseItem(
+    string ToolName,
+    JsonElement? ToolInput,
+    JsonElement? ToolOutput,
+    string? Status,
+    string? ToolUseId,
+    DateTimeOffset? ResolvedAt);
