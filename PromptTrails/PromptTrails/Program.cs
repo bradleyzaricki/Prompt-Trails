@@ -7,9 +7,12 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Pgvector.EntityFrameworkCore;
 using PromptTrails.Auth;
 using PromptTrails.Data;
+using PromptTrails.Enrichment;
 using PromptTrails.Models;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -20,10 +23,38 @@ var cfg = builder.Configuration;
 const string FrontendBaseUrl = "http://localhost:2324";
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
-    opt.UseNpgsql(cfg.GetConnectionString("Postgres"))
+    opt.UseNpgsql(cfg.GetConnectionString("Postgres"), o => o.UseVector())
        .UseSnakeCaseNamingConvention());
 
 builder.Services.AddScoped<JwtTokenService>();
+
+// ── Enrichment layer (async summaries + embeddings; see Enrichment/) ───────────
+builder.Services.Configure<EnrichmentOptions>(cfg.GetSection(EnrichmentOptions.SectionName));
+
+// The Anthropic SDK reads ANTHROPIC_API_KEY from the environment. Let config/user-secrets seed it
+// (Enrichment:Summarizer:ApiKey) without forcing an env var in dev.
+var anthropicKey = cfg[$"{EnrichmentOptions.SectionName}:Summarizer:ApiKey"];
+if (!string.IsNullOrWhiteSpace(anthropicKey))
+    Environment.SetEnvironmentVariable("ANTHROPIC_API_KEY", anthropicKey);
+
+builder.Services.AddSingleton<OllamaGate>();                                    // throttles local Ollama traffic
+builder.Services.AddHttpClient<IEmbeddingProvider, OllamaEmbeddingProvider>();  // typed client → Ollama
+
+// Two summarizer backends, resolved by key. The worker routes between them (Enrichment:Summarizer:
+// Provider): local Ollama by default, spilling overflow to Haiku once the backlog stacks past the
+// threshold. Keyed + lazily resolved so an Ollama-only deployment never constructs the Haiku client
+// (which needs an API key), and vice-versa.
+builder.Services.AddKeyedSingleton<ISummarizer, HaikuSummarizer>("haiku");
+builder.Services.AddKeyedSingleton<ISummarizer, OllamaSummarizer>("ollama");
+// Convenience default = the primary provider, for any non-worker caller.
+builder.Services.AddSingleton<ISummarizer>(sp =>
+{
+    var provider = sp.GetRequiredService<IOptions<EnrichmentOptions>>().Value.Summarizer.Provider;
+    var key = provider.Equals("haiku", StringComparison.OrdinalIgnoreCase) ? "haiku" : "ollama";
+    return sp.GetRequiredKeyedService<ISummarizer>(key);
+});
+builder.Services.AddScoped<ISearchService, NullSearchService>();               // Phase 3 replaces this
+builder.Services.AddHostedService<EnrichmentWorker>();
 
 // Swagger / OpenAPI — a browsable test page at /swagger with an Authorize button.
 builder.Services.AddEndpointsApiExplorer();
@@ -311,6 +342,48 @@ app.MapPost("/api/prompts", async (IngestPromptRequest req, ClaimsPrincipal me, 
     await db.SaveChangesAsync();
 
     return Results.Ok(new { id = entry.Id, sessionId = session.Id, deduped = false });
+}).RequireAuthorization();
+
+// Inspect one prompt's enrichment (for `prompt-trail enrich --show <id>` and debugging the
+// pipeline). Scoped to the caller through the session — you can only read your own prompts.
+app.MapGet("/api/prompts/{id:long}/enrichment", async (long id, ClaimsPrincipal me, AppDbContext db) =>
+{
+    var userId = CurrentUserId(me);
+
+    var entry = await db.PromptEntries
+        .Where(p => p.Id == id && p.Session.UserId == userId)
+        .Select(p => new
+        {
+            p.Id,
+            p.Category,
+            p.EnrichedAt,
+            enriched = p.EnrichedAt != null,
+            p.Summary,          // raw jsonb string ({problem, solution, terms, rejected, outcome, embedding_text})
+            p.ProblemEmbeddingText,
+            p.SolutionEmbeddingText,
+            hasEmbedding = p.ProblemEmbedding != null && p.SolutionEmbedding != null,
+ 
+        })
+        .SingleOrDefaultAsync();
+
+    if (entry is null) return Results.NotFound();
+
+    // Re-parse the jsonb summary so it comes back as a JSON object, not an escaped string.
+    JsonElement? summary = string.IsNullOrWhiteSpace(entry.Summary)
+        ? null
+        : JsonSerializer.Deserialize<JsonElement>(entry.Summary);
+
+    return Results.Ok(new
+    {
+        entry.Id,
+        entry.Category,
+        entry.EnrichedAt,
+        entry.enriched,
+        summary,
+        entry.ProblemEmbeddingText,
+        entry.SolutionEmbeddingText,
+        entry.hasEmbedding,
+    });
 }).RequireAuthorization();
 
 app.Run();

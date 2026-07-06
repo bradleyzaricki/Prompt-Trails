@@ -10,6 +10,7 @@ import { runClear } from './commands/clear.js'
 import { runSearch } from './commands/search.js'
 import { runLogin, runWhoami } from './commands/login.js'
 import { runPush } from './commands/push.js'
+import { runEnrich } from './commands/enrich.js'
 
 const program = new Command()
 
@@ -95,5 +96,11 @@ program
   .command('whoami')
   .description('Show the currently authenticated user')
   .action(runWhoami)
+
+program
+  .command('enrich')
+  .description('Inspect the server-side enrichment (summary + embedding) of a prompt')
+  .option('--show <id>', 'server prompt id to inspect')
+  .action((options) => runEnrich(options))
 
 program.parse()

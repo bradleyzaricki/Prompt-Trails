@@ -16,6 +16,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     {
         // Column/table names are snake_cased by UseSnakeCaseNamingConvention() in Program.cs.
 
+        // pgvector lives in a Postgres extension; declaring it here makes the migration emit
+        // `CREATE EXTENSION IF NOT EXISTS vector` before any vector column is created.
+        b.HasPostgresExtension("vector");
+
         b.Entity<User>(e =>
         {
             e.Property(u => u.CreatedAt).HasDefaultValueSql("now()");
@@ -46,6 +50,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.Property(s => s.StartedAt).HasDefaultValueSql("now()");
             e.HasIndex(s => s.AgentSessionId).IsUnique();     // upsert key
+            e.Property(s => s.ContextCard).HasColumnType("jsonb");   // Phase 2 session card
             e.HasOne(s => s.User)
              .WithMany()
              .HasForeignKey(s => s.UserId)
@@ -63,6 +68,28 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(p => p.Category).HasDefaultValue("other");
             // List<string> -> Postgres text[] (native array mapping, no extra config needed)
             e.HasIndex(p => p.PromptUuid).IsUnique();          // idempotency / dedup
+
+            // ── Enrichment columns ──────────────────────────────────────────────
+            e.Property(p => p.Summary).HasColumnType("jsonb");
+            // Fixed 768 dims (nomic-embed-text). Changing the embedding model means a new
+            // migration for the column width — the dimension is not runtime-configurable.
+            e.Property(p => p.ProblemEmbedding).HasColumnType("vector(768)");
+            e.Property(p => p.SolutionEmbedding).HasColumnType("vector(768)");
+            // Work queue: the enrichment worker scans `WHERE enriched_at IS NULL`. Partial
+            // index keeps that scan tiny — it only holds the rows still needing work.
+            e.HasIndex(p => p.EnrichedAt)
+             .HasFilter("enriched_at IS NULL");
+
+            // Approximate-nearest-neighbour index for cosine similarity search (Phase 3).
+            // HNSW = fast queries, slower build; cosine matches how we'll rank.
+            e.HasIndex(p => p.ProblemEmbedding)
+                .HasMethod("hnsw")
+                .HasOperators("vector_cosine_ops");
+
+            e.HasIndex(p => p.SolutionEmbedding)
+                .HasMethod("hnsw")
+                .HasOperators("vector_cosine_ops");
+            
             e.HasOne(p => p.Session)
              .WithMany(s => s.Prompts)
              .HasForeignKey(p => p.SessionId)

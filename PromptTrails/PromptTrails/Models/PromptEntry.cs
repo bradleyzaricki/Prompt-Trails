@@ -1,3 +1,5 @@
+using Pgvector;
+
 namespace PromptTrails.Models;
 
 /// <summary>
@@ -34,6 +36,40 @@ public class PromptEntry
     public List<string> Languages { get; set; } = new();
 
     public DateTimeOffset CreatedAt { get; set; }
+
+    // ── Enrichment (written server-side by the enrichment worker, not by ingest) ──────────
+    // Everything below is null until the worker processes the row. EnrichedAt is the gate:
+    // `WHERE enriched_at IS NULL` is the work queue, and setting it marks the row done. This
+    // keeps enrichment idempotent and cheap — a row is embedded/summarized exactly once.
+
+    /// <summary>
+    /// Haiku-generated structured summary as raw JSON (jsonb). Shape is defined by
+    /// <c>Enrichment.PromptSummary</c>: { problem, solution, terms, rejected, outcome }.
+    /// Stored as text and mapped to jsonb — the app reads/writes it as a serialized blob.
+    /// </summary>
+    public string? Summary { get; set; }
+
+    /// <summary>
+    /// The exact text that was fed to the embedding model. Synthesized by Haiku (not the raw
+    /// prompt) so noise is stripped before it hits vector space. Kept so we can re-embed
+    /// without re-summarizing when the embedding model changes.
+    /// </summary>
+    public string? ProblemEmbeddingText { get; set; }
+    
+    public string? SolutionEmbeddingText { get; set; }
+
+
+    /// <summary>
+    /// Vector embedding of <see cref="EmbeddingText"/>. Dimension is fixed by the embedding
+    /// model (nomic-embed-text = 768) and must match the migration's vector(N) column.
+    /// </summary>
+    public Vector? ProblemEmbedding { get; set; }
+    
+    public Vector? SolutionEmbedding { get; set; }
+
+
+    /// <summary>Null = not yet enriched (work queue). Set once the worker finishes the row.</summary>
+    public DateTimeOffset? EnrichedAt { get; set; }
 
     public ICollection<PromptResponse> Responses { get; set; } = new List<PromptResponse>();
 }

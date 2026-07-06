@@ -34,6 +34,8 @@ export interface PromptEntry {
   languages: string             // JSON array of detected languages
   prompt_category: string       // "question" | "code_change" | "command" | "other"
   prompt_uuid: string           // UUID from conversation log for dedup
+  pushed: number                // 1 = synced to server
+  pushed_at?: string            // when it synced
 }
 
 export interface PromptResponse {

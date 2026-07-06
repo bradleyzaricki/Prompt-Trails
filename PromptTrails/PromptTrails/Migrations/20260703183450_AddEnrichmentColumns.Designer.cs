@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Pgvector;
@@ -13,9 +14,11 @@ using PromptTrails.Data;
 namespace PromptTrails.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260703183450_AddEnrichmentColumns")]
+    partial class AddEnrichmentColumns
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -95,6 +98,14 @@ namespace PromptTrails.Migrations
                         .HasColumnType("text")
                         .HasColumnName("diff");
 
+                    b.Property<Vector>("Embedding")
+                        .HasColumnType("vector(768)")
+                        .HasColumnName("embedding");
+
+                    b.Property<string>("EmbeddingText")
+                        .HasColumnType("text")
+                        .HasColumnName("embedding_text");
+
                     b.Property<DateTimeOffset?>("EnrichedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("enriched_at");
@@ -121,14 +132,6 @@ namespace PromptTrails.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("lines_removed");
 
-                    b.Property<Vector>("ProblemEmbedding")
-                        .HasColumnType("vector(768)")
-                        .HasColumnName("problem_embedding");
-
-                    b.Property<string>("ProblemEmbeddingText")
-                        .HasColumnType("text")
-                        .HasColumnName("problem_embedding_text");
-
                     b.Property<string>("PromptText")
                         .IsRequired()
                         .HasColumnType("text")
@@ -143,14 +146,6 @@ namespace PromptTrails.Migrations
                         .HasColumnType("bigint")
                         .HasColumnName("session_id");
 
-                    b.Property<Vector>("SolutionEmbedding")
-                        .HasColumnType("vector(768)")
-                        .HasColumnName("solution_embedding");
-
-                    b.Property<string>("SolutionEmbeddingText")
-                        .HasColumnType("text")
-                        .HasColumnName("solution_embedding_text");
-
                     b.Property<DateTimeOffset>("SubmittedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("submitted_at");
@@ -162,15 +157,15 @@ namespace PromptTrails.Migrations
                     b.HasKey("Id")
                         .HasName("pk_prompt_entries");
 
+                    b.HasIndex("Embedding")
+                        .HasDatabaseName("ix_prompt_entries_embedding");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("Embedding"), "hnsw");
+                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("Embedding"), new[] { "vector_cosine_ops" });
+
                     b.HasIndex("EnrichedAt")
                         .HasDatabaseName("ix_prompt_entries_enriched_at")
                         .HasFilter("enriched_at IS NULL");
-
-                    b.HasIndex("ProblemEmbedding")
-                        .HasDatabaseName("ix_prompt_entries_problem_embedding");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("ProblemEmbedding"), "hnsw");
-                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("ProblemEmbedding"), new[] { "vector_cosine_ops" });
 
                     b.HasIndex("PromptUuid")
                         .IsUnique()
@@ -178,12 +173,6 @@ namespace PromptTrails.Migrations
 
                     b.HasIndex("SessionId")
                         .HasDatabaseName("ix_prompt_entries_session_id");
-
-                    b.HasIndex("SolutionEmbedding")
-                        .HasDatabaseName("ix_prompt_entries_solution_embedding");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SolutionEmbedding"), "hnsw");
-                    NpgsqlIndexBuilderExtensions.HasOperators(b.HasIndex("SolutionEmbedding"), new[] { "vector_cosine_ops" });
 
                     b.ToTable("prompt_entries", (string)null);
                 });

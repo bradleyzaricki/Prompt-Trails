@@ -21,6 +21,7 @@ import { initShadowRepo, snapshotBefore, snapshotAfter } from '../../hooks/shado
 import { getShadowGitDir } from '../../db/index.js'
 import { extractFileExtensions, detectLanguages, categorizeByToolUsage } from '../utils/metadata.js'
 import { findPromptByText } from '../../hooks/conversation-log.js'
+import { pushEntry } from '../../api/push-entry.js'
 import type { UserPromptSubmitPayload, StopPayload } from '../../types/index.js'
 
 // ─── Tag stripping ────────────────────────────────────────────────────────
@@ -128,6 +129,14 @@ async function finalizeCachedEntry(cacheEntry: {
   )
 
   resolvePendingResponses(cacheEntry.promptEntryId, diffStats.diff)
+
+  // Auto-push: best-effort, never blocks finalization
+  try {
+    const entry = getPromptEntry(cacheEntry.promptEntryId)
+    if (entry) await pushEntry(entry)
+  } catch {
+    // Server unreachable or not logged in — entry stays unpushed for manual `push`
+  }
 }
 
 // ─── Hook handlers ────────────────────────────────────────────────────────

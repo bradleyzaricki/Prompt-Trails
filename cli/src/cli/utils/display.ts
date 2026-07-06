@@ -45,11 +45,15 @@ export function formatPromptEntry(entry: PromptEntry, responseCount = 0): string
   lines.push(
     `${BOLD}[${entry.id}]${RESET} ${entry.prompt_text.slice(0, 80)}${entry.prompt_text.length > 80 ? '...' : ''}`
   )
+  const sync = entry.pushed === 1
+    ? `${GREEN}↑ synced${RESET}`
+    : `${DIM}○ local${RESET}`
+
   lines.push(
     `${DIM}${entry.submitted_at}${RESET}  ${label(entry)}` +
     `${entry.prompt_category !== 'question' ? `  ${CYAN}${entry.prompt_category}${RESET}` : ''}  ` +
     `${GREEN}+${entry.lines_added}${RESET} ${RED}-${entry.lines_removed}${RESET} ` +
-    `${DIM}(${entry.files_changed} files, ${responseCount} steps)${RESET}`
+    `${DIM}(${entry.files_changed} files, ${responseCount} steps)${RESET}  ${sync}`
   )
 
   return lines.join('\n')
@@ -65,6 +69,7 @@ export function formatPromptEntryDetail(entry: PromptEntry, responses?: PromptRe
   lines.push(`${BOLD}Text:${RESET} ${entry.prompt_text}`)
   lines.push(`${BOLD}Submitted:${RESET} ${entry.submitted_at}`)
   lines.push(`${BOLD}Status:${RESET} ${label(entry)}`)
+  lines.push(`${BOLD}Sync:${RESET} ${entry.pushed === 1 ? `${GREEN}↑ synced${RESET} ${DIM}${entry.pushed_at ?? ''}${RESET}` : `${DIM}○ local only${RESET}`}`)
   lines.push(`${BOLD}Changes:${RESET} ${GREEN}+${entry.lines_added}${RESET} ${RED}-${entry.lines_removed}${RESET} across ${entry.files_changed} files`)
 
   if (entry.claude_response) {

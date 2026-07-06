@@ -26,10 +26,30 @@ export interface IngestPromptPayload {
   responses: IngestResponseItem[]
 }
 
+export interface EnrichmentSummary {
+  problem?: string
+  solution?: string
+  terms?: string[]
+  rejected?: string
+  outcome?: string
+  embedding_text?: string
+}
+
+export interface EnrichmentView {
+  id: number
+  category: string
+  enrichedAt: string | null
+  enriched: boolean
+  summary: EnrichmentSummary | null
+  embeddingText: string | null
+  hasEmbedding: boolean
+}
+
 export interface ApiClient {
   whoami(): Promise<{ id: string; name: string; email?: string }>
   createProject(name: string, description?: string): Promise<{ id: number; name: string }>
   ingestPrompt(payload: IngestPromptPayload): Promise<{ id: number; deduped: boolean }>
+  getEnrichment(promptId: number): Promise<EnrichmentView>
 }
 
 export function createApiClient(config: Config): ApiClient {
@@ -70,6 +90,9 @@ export function createApiClient(config: Config): ApiClient {
         method: 'POST',
         body: JSON.stringify(payload),
       })).json()
+    },
+    async getEnrichment(promptId) {
+      return (await req(`/api/prompts/${promptId}/enrichment`)).json()
     },
   }
 }

@@ -8,6 +8,7 @@
   </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="Anthropic" Version="12.35.1" />
         <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.2" />
         <PackageReference Include="EFCore.NamingConventions" Version="9.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.0" />
@@ -16,7 +17,13 @@
             <PrivateAssets>all</PrivateAssets>
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="Pgvector.EntityFrameworkCore" Version="0.3.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <!-- The Haiku prompt template is read at runtime; ship it next to the binary. -->
+        <Content Include="Enrichment/Prompts/summary.md" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>
