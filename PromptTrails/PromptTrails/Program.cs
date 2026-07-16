@@ -12,6 +12,7 @@ using Microsoft.IdentityModel.Tokens;
 using Pgvector.EntityFrameworkCore;
 using PromptTrails.Auth;
 using PromptTrails.Data;
+using PromptTrails.Endpoints;
 using PromptTrails.Enrichment;
 using PromptTrails.Models;
 
@@ -449,6 +450,10 @@ app.MapGet("/api/search", async (
 
     return Results.Ok(results);
 }).RequireAuthorization();
+
+// ── Frontend read endpoints (history feed, prompt detail, dashboard stats) ─────
+app.MapPromptReadEndpoints();
+app.MapStatsEndpoints();
 
 app.Run();
 
