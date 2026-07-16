@@ -52,10 +52,5 @@ your `solution` text).
     - **Middle (0.3–0.7)** — for either score: partially reusable — real but narrow, or specific but
       likely to go stale.
 
-- **embedding_text** — A single dense paragraph (2–5 sentences) that captures the semantic essence
-  of this turn for vector search. Write it the way a developer would later *describe the thing they
-  vaguely remember doing*. Weave in the key terms naturally. No headers, no lists, no filler like
-  "In this turn". This text — not the raw prompt — is what gets embedded, so it must stand alone.
-
 Be faithful to the inputs. Never fabricate file names, functions, or decisions that are not present
 in the material you were given.

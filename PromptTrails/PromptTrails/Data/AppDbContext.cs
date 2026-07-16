@@ -97,7 +97,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasGeneratedTsVectorColumn(
                     p => p.SearchVector!,
                     "english",
-                    p => new { p.ProblemEmbeddingText, p.SolutionEmbeddingText, p.PromptText })
+                    p => new { p.ProblemEmbeddingText, p.SolutionEmbeddingText, p.TermsText, p.PromptText })
                 .HasIndex(p => p.SearchVector)
                 .HasMethod("GIN");
 

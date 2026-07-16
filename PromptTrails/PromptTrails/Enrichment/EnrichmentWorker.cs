@@ -121,6 +121,9 @@ public class EnrichmentWorker(
             entry.ProblemEmbedding = result.ProblemEmbedding is null ? null : new Vector(result.ProblemEmbedding);
             entry.SolutionEmbeddingText = result.SolutionText;
             entry.SolutionEmbedding = result.SolutionEmbedding is null ? null : new Vector(result.SolutionEmbedding);
+            entry.TermsText = result.Summary.Terms.Count > 0
+                ? string.Join(" ", result.Summary.Terms)
+                : null;
             // Developer-facing provenance: stamp the embedding model only when a vector was actually
             // produced, so the column and the vectors never disagree (a row with no embedding stays null).
             var embedded = result.ProblemEmbedding is not null || result.SolutionEmbedding is not null;

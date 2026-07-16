@@ -451,8 +451,10 @@ app.MapGet("/api/search", async (
     return Results.Ok(results);
 }).RequireAuthorization();
 
-// ── Frontend read endpoints (history feed, prompt detail, dashboard stats) ─────
+// ── Frontend read endpoints (history feed, prompt detail, sessions, project detail, stats) ─────
 app.MapPromptReadEndpoints();
+app.MapSessionEndpoints();
+app.MapProjectEndpoints();
 app.MapStatsEndpoints();
 
 app.Run();

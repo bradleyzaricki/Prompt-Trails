@@ -56,8 +56,17 @@ public class PromptEntry
     /// without re-summarizing when the embedding model changes.
     /// </summary>
     public string? ProblemEmbeddingText { get; set; }
-    
+
     public string? SolutionEmbeddingText { get; set; }
+
+    /// <summary>
+    /// Space-joined identifier tokens extracted by the summarizer (function names, class/type
+    /// names, file names, config keys, library names). Written from <c>PromptSummary.Terms</c>
+    /// by the enrichment worker. Stored as a flat string so <see cref="SearchVector"/> (a
+    /// generated tsvector column) can index it directly — exact-identifier lookups match this
+    /// row even if the prose summaries never repeat the name. Null until enriched.
+    /// </summary>
+    public string? TermsText { get; set; }
 
 
     /// <summary>

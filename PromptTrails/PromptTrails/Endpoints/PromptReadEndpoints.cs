@@ -23,8 +23,9 @@ public static class PromptReadEndpoints
         // Sort: "recent" (default, by submittedAt) | "solutionUseful" | "problemUseful".
         // Filters: projectId, sessionId, category, enriched. Returns { items, nextCursor }.
         app.MapGet("/api/prompts", async (
-            long? projectId, long? sessionId, string? category, bool? enriched, string? sort,
-            string? cursor, int? limit, ClaimsPrincipal me, AppDbContext db, CancellationToken ct) =>
+            long? projectId, long? sessionId, string? category, bool? enriched, bool? hasRejected,
+            string? sort, string? cursor, int? limit,
+            ClaimsPrincipal me, AppDbContext db, CancellationToken ct) =>
         {
             var userId = me.UserId();
             var take = Math.Clamp(limit ?? 30, 1, 100);
@@ -36,6 +37,7 @@ public static class PromptReadEndpoints
             if (!string.IsNullOrWhiteSpace(category)) q = q.Where(p => p.Category == category);
             if (enriched is true) q = q.Where(p => p.EnrichedAt != null);
             else if (enriched is false) q = q.Where(p => p.EnrichedAt == null);
+            if (hasRejected is true) q = q.Where(p => p.Responses.Any(r => r.Status == "rejected"));
 
             var cur = Cursor.Decode(cursor);
             IOrderedQueryable<PromptEntry> ordered;
