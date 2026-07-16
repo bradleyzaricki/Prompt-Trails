@@ -39,6 +39,8 @@ public class HaikuSummarizer : ISummarizer
                 $"Haiku prompt template not found at '{path}'. Set Enrichment:Summarizer:PromptTemplatePath.");
     }
 
+    public string ModelName => _opts.Summarizer.Model;
+
     public async Task<PromptSummary> SummarizeAsync(SummarizerInput input, CancellationToken ct = default)
     {
         var userContent = SummarizerContent.BuildUserContent(input, _opts);

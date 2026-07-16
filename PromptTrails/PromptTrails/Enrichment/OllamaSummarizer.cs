@@ -49,6 +49,8 @@ public class OllamaSummarizer : ISummarizer
                 $"Summarizer prompt template not found at '{path}'. Set Enrichment:Summarizer:PromptTemplatePath.");
     }
 
+    public string ModelName => _model;
+
     public async Task<PromptSummary> SummarizeAsync(SummarizerInput input, CancellationToken ct = default)
     {
         var userContent = SummarizerContent.BuildUserContent(input, _opts);
@@ -83,19 +85,24 @@ public class OllamaSummarizer : ISummarizer
 
     // JSON schema Ollama enforces on the response — the local mirror of Haiku's structured output.
     // Serialized as its runtime (anonymous) shape by System.Text.Json.
+    // Field names MUST match PromptSummary's [JsonPropertyName]s exactly — Ollama emits whatever keys
+    // this schema names, and the deserializer binds by those keys. They drifted apart once (the schema
+    // said "solution_embedding_text" while the DTO reads "solution"), which silently left Solution
+    // empty on every row. Keep this list in lockstep with PromptSummary.
     private static readonly object SummarySchema = new
     {
         type = "object",
         properties = new
         {
             problem = new { type = "string" },
-            solution_embedding_text = new { type = "string" },
+            solution = new { type = "string" },
             terms = new { type = "array", items = new { type = "string" } },
             rejected = new { type = "string" },
             outcome = new { type = "string" },
-            problem_embedding_text = new { type = "string" },
+            problem_useful = new { type = "number" },
+            solution_useful = new { type = "number" },
         },
-        required = new[] { "problem", "solution_embedding_text", "terms", "rejected", "outcome", "problem_embedding_text" },
+        required = new[] { "problem", "solution", "terms", "rejected", "outcome", "problem_useful", "solution_useful" },
     };
 
     private record OllamaChatRequest(

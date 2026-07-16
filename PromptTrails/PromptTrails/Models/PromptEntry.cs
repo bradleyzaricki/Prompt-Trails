@@ -1,3 +1,4 @@
+using NpgsqlTypes;
 using Pgvector;
 
 namespace PromptTrails.Models;
@@ -64,8 +65,41 @@ public class PromptEntry
     /// model (nomic-embed-text = 768) and must match the migration's vector(N) column.
     /// </summary>
     public Vector? ProblemEmbedding { get; set; }
-    
+
     public Vector? SolutionEmbedding { get; set; }
+
+    /// <summary>
+    /// Which embedding model produced <see cref="ProblemEmbedding"/> / <see cref="SolutionEmbedding"/>
+    /// (e.g. "nomic-embed-text"). Developer-facing provenance so it's obvious which model a row's
+    /// vectors came from without cross-referencing config. Null until the row is embedded; a single
+    /// value because both vectors are always produced by the same provider in one enrichment pass.
+    /// </summary>
+    public string? EmbeddingModel { get; set; }
+
+    /// <summary>
+    /// 0.0–1.0 usefulness of the <b>problem</b>: how reusable/specific the user's intent is as a future
+    /// reference. High for a specific, durable problem someone would search for again; low for vague,
+    /// time-varying, or operational-command prompts that carry no design decision (e.g. "what is this
+    /// project", "start the server"). Pairs with <see cref="ProblemEmbedding"/>. Null until enriched.
+    /// </summary>
+    public double? ProblemUseful { get; set; }
+
+    /// <summary>
+    /// 0.0–1.0 usefulness of the <b>solution</b>: how reusable/specific what was actually done (or
+    /// explained) is, judged independently of the problem. A vague question can still have a highly
+    /// reusable solution (e.g. "what did you implement last" → a specific, durable answer). Low when
+    /// there is no real solution or it is trivial/operational. Pairs with <see cref="SolutionEmbedding"/>.
+    /// Null until enriched.
+    /// </summary>
+    public double? SolutionUseful { get; set; }
+
+    /// <summary>
+    /// Postgres full-text index over the denoised embedding texts + raw prompt, maintained as a
+    /// STORED generated column (see <c>AppDbContext</c>) so it updates automatically when the worker
+    /// writes the embedding texts — no code path sets it. Backs the full-text half of hybrid search;
+    /// GIN-indexed. Null only before the row is enriched (both embedding texts null).
+    /// </summary>
+    public NpgsqlTsVector? SearchVector { get; set; }
 
 
     /// <summary>Null = not yet enriched (work queue). Set once the worker finishes the row.</summary>

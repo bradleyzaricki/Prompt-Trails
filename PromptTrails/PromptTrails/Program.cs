@@ -18,6 +18,8 @@ using PromptTrails.Models;
 var builder = WebApplication.CreateBuilder(args);
 var cfg = builder.Configuration;
 
+// Composition root: services are registered below, then endpoints are mapped inline (Minimal API style).
+
 // Where the SPA lives. Post-login redirects are pinned to this origin so a caller-supplied
 // returnUrl can never send the JWT to an off-site host (open-redirect / token theft).
 const string FrontendBaseUrl = "http://localhost:2324";
@@ -53,7 +55,7 @@ builder.Services.AddSingleton<ISummarizer>(sp =>
     var key = provider.Equals("haiku", StringComparison.OrdinalIgnoreCase) ? "haiku" : "ollama";
     return sp.GetRequiredKeyedService<ISummarizer>(key);
 });
-builder.Services.AddScoped<ISearchService, NullSearchService>();               // Phase 3 replaces this
+builder.Services.AddScoped<ISearchService, PgVectorSearchService>();           // hybrid vector + full-text retrieval
 builder.Services.AddHostedService<EnrichmentWorker>();
 
 // Swagger / OpenAPI — a browsable test page at /swagger with an Authorize button.
@@ -356,13 +358,16 @@ app.MapGet("/api/prompts/{id:long}/enrichment", async (long id, ClaimsPrincipal 
         {
             p.Id,
             p.Category,
+            p.ProblemUseful,
+            p.SolutionUseful,
             p.EnrichedAt,
             enriched = p.EnrichedAt != null,
-            p.Summary,          // raw jsonb string ({problem, solution, terms, rejected, outcome, embedding_text})
+            p.Summary,          // raw jsonb string ({problem, solution, terms, rejected, outcome, problem_useful, solution_useful})
             p.ProblemEmbeddingText,
             p.SolutionEmbeddingText,
+            p.EmbeddingModel,
             hasEmbedding = p.ProblemEmbedding != null && p.SolutionEmbedding != null,
- 
+
         })
         .SingleOrDefaultAsync();
 
@@ -377,13 +382,72 @@ app.MapGet("/api/prompts/{id:long}/enrichment", async (long id, ClaimsPrincipal 
     {
         entry.Id,
         entry.Category,
+        entry.ProblemUseful,
+        entry.SolutionUseful,
         entry.EnrichedAt,
         entry.enriched,
         summary,
         entry.ProblemEmbeddingText,
         entry.SolutionEmbeddingText,
+        entry.EmbeddingModel,
         entry.hasEmbedding,
     });
+}).RequireAuthorization();
+
+// ── Search ─────────────────────────────────────────────────────────────────────
+// Hybrid retrieval over the caller's enriched prompts. The service ranks (vector + full-text, fused
+// and gated by usefulness); the endpoint hydrates display fields for the top hits and re-parses the
+// jsonb summary into an object. projectId is an optional soft boost, not a filter.
+app.MapGet("/api/search", async (
+    string q, long? projectId, ClaimsPrincipal me, ISearchService search, AppDbContext db, CancellationToken ct) =>
+{
+    if (string.IsNullOrWhiteSpace(q))
+        return Results.BadRequest(new { error = "q is required" });
+
+    var userId = CurrentUserId(me);
+    var hits = await search.SearchAsync(q, userId, projectId, ct);
+    if (hits.Count == 0)
+        return Results.Ok(Array.Empty<object>());
+
+    var ids = hits.Select(h => h.PromptEntryId).ToList();
+    var rows = await db.PromptEntries
+        .Where(p => ids.Contains(p.Id))
+        .Select(p => new
+        {
+            p.Id,
+            p.PromptText,
+            p.Category,
+            p.ProblemUseful,
+            p.SolutionUseful,
+            p.SubmittedAt,
+            ProjectId = p.Session.ProjectId,
+        })
+        .ToListAsync(ct);
+    var byId = rows.ToDictionary(r => r.Id);
+
+    // Preserve the service's score ordering; attach display fields + parsed summary.
+    var results = hits.Select(h =>
+    {
+        var r = byId[h.PromptEntryId];
+        JsonElement? summary = string.IsNullOrWhiteSpace(h.Summary)
+            ? null
+            : JsonSerializer.Deserialize<JsonElement>(h.Summary);
+        return new
+        {
+            promptEntryId = h.PromptEntryId,
+            sessionId = h.SessionId,
+            projectId = r.ProjectId,
+            score = h.Score,
+            r.PromptText,
+            r.Category,
+            r.ProblemUseful,
+            r.SolutionUseful,
+            r.SubmittedAt,
+            summary,
+        };
+    });
+
+    return Results.Ok(results);
 }).RequireAuthorization();
 
 app.Run();

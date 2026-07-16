@@ -2,10 +2,10 @@ import { getDb } from '../../db/index.js'
 import {
   findProjectForCwd,
   getOrCreateSession,
-  getProjectById,
   getClaudeSessionId,
   insertPromptEntry,
   updateClaudeResponse,
+  updatePromptUuid,
   finalizePromptEntry,
   getPromptEntry,
   insertPromptResponse,
@@ -48,7 +48,10 @@ function cleanPromptText(raw: string): string {
 
 // ─── Conversation log backfill ────────────────────────────────────────────
 
-function backfillFromConversationLog(promptEntryId: number, projectId: number): {
+// `logPath` is the directory Claude Code encodes to locate this session's transcript —
+// the agent's actual cwd, NOT the tracked project path (they differ when a project is
+// tracked at a parent of the working directory).
+function backfillFromConversationLog(promptEntryId: number, logPath: string): {
   toolCalls: Array<{ tool_name: string; tool_input: Record<string, unknown> }>
 } {
   const toolCalls: Array<{ tool_name: string; tool_input: Record<string, unknown> }> = []
@@ -56,14 +59,17 @@ function backfillFromConversationLog(promptEntryId: number, projectId: number): 
   const entry = getPromptEntry(promptEntryId)
   if (!entry) return { toolCalls }
 
-  const project = getProjectById(projectId)
-  if (!project) return { toolCalls }
-
   const claudeSessionId = getClaudeSessionId(promptEntryId)
   if (!claudeSessionId) return { toolCalls }
 
-  const matched = findPromptByText(project.path, claudeSessionId, entry.prompt_text)
+  const matched = findPromptByText(logPath, claudeSessionId, entry.prompt_text)
   if (!matched) return { toolCalls }
+
+  // Adopt the transcript's stable message UUID as the idempotency key. Falls back to
+  // `local-${id}` at push time only when this never runs (transcript unavailable).
+  if (matched.uuid) {
+    updatePromptUuid(promptEntryId, matched.uuid)
+  }
 
   // Backfill Claude's response text
   const claudeResponse = matched.responses
@@ -98,6 +104,7 @@ async function finalizeCachedEntry(cacheEntry: {
   promptEntryId: number
   projectId: number
   projectPath: string
+  cwd?: string
 }): Promise<void> {
   const entry = getPromptEntry(cacheEntry.promptEntryId)
   if (!entry || entry.finalized === 1) return
@@ -107,7 +114,9 @@ async function finalizeCachedEntry(cacheEntry: {
 
   let toolCalls: Array<{ tool_name: string; tool_input: Record<string, unknown> }> = []
   try {
-    const result = backfillFromConversationLog(cacheEntry.promptEntryId, cacheEntry.projectId)
+    // Fall back to projectPath for cache entries written before cwd was captured.
+    const logPath = cacheEntry.cwd ?? cacheEntry.projectPath
+    const result = backfillFromConversationLog(cacheEntry.promptEntryId, logPath)
     toolCalls = result.toolCalls
   } catch {
     // Best-effort — conversation log may not be available
@@ -167,6 +176,7 @@ async function handleUserPromptSubmit(payload: UserPromptSubmitPayload): Promise
     promptEntryId: entry.id,
     projectId: project.id,
     projectPath: project.path,
+    cwd: payload.cwd,
   })
 
   const shadowDir = getShadowGitDir(project.id)

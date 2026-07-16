@@ -89,7 +89,18 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(p => p.SolutionEmbedding)
                 .HasMethod("hnsw")
                 .HasOperators("vector_cosine_ops");
-            
+
+            // Full-text half of hybrid search. STORED generated column over the denoised embedding
+            // texts + raw prompt, so it stays in sync whenever the worker writes those fields — no
+            // application code maintains it. GIN index makes @@ lookups fast. The two embedding-text
+            // columns are nullable; the helper coalesces nulls before to_tsvector.
+            e.HasGeneratedTsVectorColumn(
+                    p => p.SearchVector!,
+                    "english",
+                    p => new { p.ProblemEmbeddingText, p.SolutionEmbeddingText, p.PromptText })
+                .HasIndex(p => p.SearchVector)
+                .HasMethod("GIN");
+
             e.HasOne(p => p.Session)
              .WithMany(s => s.Prompts)
              .HasForeignKey(p => p.SessionId)

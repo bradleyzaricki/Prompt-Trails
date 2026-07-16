@@ -27,6 +27,8 @@ public class OllamaEmbeddingProvider : IEmbeddingProvider
 
     public int Dimensions => _opts.Dimensions;
 
+    public string ModelName => _opts.Model;
+
     public async Task<float[]> EmbedAsync(string text, CancellationToken ct = default)
     {
         // Gate BEFORE sending so queue-wait isn't counted against HttpClient.Timeout.

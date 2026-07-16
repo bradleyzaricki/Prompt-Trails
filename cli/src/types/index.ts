@@ -76,6 +76,11 @@ export interface SessionCacheEntry {
   promptEntryId: number
   projectId: number
   projectPath: string
+  // Actual working directory of the coding-agent session. Claude Code stores its
+  // transcript under an encoding of this cwd, which may differ from projectPath
+  // (prefix match allows a tracked project to cover subdirectories). Optional for
+  // backward compatibility with cache entries written before this field existed.
+  cwd?: string
 }
 
 export interface SessionCache {

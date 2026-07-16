@@ -32,6 +32,11 @@ export function deleteProject(id: number): void {
   db.prepare('DELETE FROM projects WHERE id = ?').run(id)
 }
 
+export function updateProjectPath(id: number, path: string): void {
+  const db = getDb()
+  db.prepare(`UPDATE projects SET path = ?, updated_at = datetime('now') WHERE id = ?`).run(path, id)
+}
+
 export function findProjectForCwd(cwd: string): Project | null {
   const db = getDb()
   const projects = db.prepare('SELECT * FROM projects').all() as Project[]
@@ -114,6 +119,12 @@ export function updateClaudeResponse(promptEntryId: number, claudeResponse: stri
   const db = getDb()
   db.prepare('UPDATE prompt_entries SET claude_response = ? WHERE id = ?')
     .run(claudeResponse, promptEntryId)
+}
+
+export function updatePromptUuid(promptEntryId: number, promptUuid: string): void {
+  const db = getDb()
+  db.prepare('UPDATE prompt_entries SET prompt_uuid = ? WHERE id = ?')
+    .run(promptUuid, promptEntryId)
 }
 
 export function finalizePromptEntry(

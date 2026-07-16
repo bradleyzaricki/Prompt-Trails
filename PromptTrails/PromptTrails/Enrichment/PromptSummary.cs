@@ -13,8 +13,12 @@ namespace PromptTrails.Enrichment;
 ///     would grep for, extracted even if the prose never repeats them.</item>
 ///   <item><b>Rejected</b> — approaches considered and discarded, so "why not X" is searchable.</item>
 ///   <item><b>Outcome</b> — did it land / get accepted / get reverted.</item>
-///   <item><b>EmbeddingText</b> — the denoised text we actually embed (Haiku synthesizes this;
-///     we embed it rather than the raw prompt so the vector reflects meaning, not noise).</item>
+///   <item><b>ProblemUseful</b> / <b>SolutionUseful</b> — 0.0–1.0 scores of how reusable the
+///     <i>problem</i> and the <i>solution</i> are, judged independently on the specificity/durability
+///     of each summary. Scored apart because a turn can have a weak problem but a strong solution:
+///     "what did you implement last" is a vague, time-varying problem (→0) with a specific, reusable
+///     solution (→high). Operational commands that carry no design decision ("start the server") score
+///     ~0 on both. Copied to <c>prompt_entries.problem_useful</c> / <c>solution_useful</c>.</item>
 /// </list>
 /// </summary>
 public class PromptSummary
@@ -33,4 +37,17 @@ public class PromptSummary
 
     [JsonPropertyName("problem")]
     public string Problem { get; set; } = "";
+
+    /// <summary>How reusable the <b>problem</b> is, 0.0 (vague/operational/time-varying) to 1.0
+    /// (a specific, durable problem someone would genuinely search for again). Judged on the
+    /// specificity of the <see cref="Problem"/> summary. Defaults to 0.0 so empty turns score zero.</summary>
+    [JsonPropertyName("problem_useful")]
+    public double ProblemUseful { get; set; }
+
+    /// <summary>How reusable the <b>solution</b> is, 0.0 (no real solution / trivial / operational) to
+    /// 1.0 (a concrete, durable technique or answer that generalizes and could be applied again).
+    /// Judged on the specificity of the <see cref="Solution"/> summary, independently of the problem —
+    /// a vague question can still yield a highly reusable solution. Defaults to 0.0.</summary>
+    [JsonPropertyName("solution_useful")]
+    public double SolutionUseful { get; set; }
 }

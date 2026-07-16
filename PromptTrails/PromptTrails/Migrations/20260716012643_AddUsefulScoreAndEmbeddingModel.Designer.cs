@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using NpgsqlTypes;
 using Pgvector;
 using PromptTrails.Data;
 
@@ -14,9 +14,11 @@ using PromptTrails.Data;
 namespace PromptTrails.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716012643_AddUsefulScoreAndEmbeddingModel")]
+    partial class AddUsefulScoreAndEmbeddingModel
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -134,10 +136,6 @@ namespace PromptTrails.Migrations
                         .HasColumnType("text")
                         .HasColumnName("problem_embedding_text");
 
-                    b.Property<double?>("ProblemUseful")
-                        .HasColumnType("double precision")
-                        .HasColumnName("problem_useful");
-
                     b.Property<string>("PromptText")
                         .IsRequired()
                         .HasColumnType("text")
@@ -147,13 +145,6 @@ namespace PromptTrails.Migrations
                         .IsRequired()
                         .HasColumnType("text")
                         .HasColumnName("prompt_uuid");
-
-                    b.Property<NpgsqlTsVector>("SearchVector")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("tsvector")
-                        .HasColumnName("search_vector")
-                        .HasAnnotation("Npgsql:TsVectorConfig", "english")
-                        .HasAnnotation("Npgsql:TsVectorProperties", new[] { "ProblemEmbeddingText", "SolutionEmbeddingText", "PromptText" });
 
                     b.Property<long>("SessionId")
                         .HasColumnType("bigint")
@@ -167,10 +158,6 @@ namespace PromptTrails.Migrations
                         .HasColumnType("text")
                         .HasColumnName("solution_embedding_text");
 
-                    b.Property<double?>("SolutionUseful")
-                        .HasColumnType("double precision")
-                        .HasColumnName("solution_useful");
-
                     b.Property<DateTimeOffset>("SubmittedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("submitted_at");
@@ -178,6 +165,10 @@ namespace PromptTrails.Migrations
                     b.Property<string>("Summary")
                         .HasColumnType("jsonb")
                         .HasColumnName("summary");
+
+                    b.Property<double?>("Useful")
+                        .HasColumnType("double precision")
+                        .HasColumnName("useful");
 
                     b.HasKey("Id")
                         .HasName("pk_prompt_entries");
@@ -195,11 +186,6 @@ namespace PromptTrails.Migrations
                     b.HasIndex("PromptUuid")
                         .IsUnique()
                         .HasDatabaseName("ix_prompt_entries_prompt_uuid");
-
-                    b.HasIndex("SearchVector")
-                        .HasDatabaseName("ix_prompt_entries_search_vector");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("SessionId")
                         .HasDatabaseName("ix_prompt_entries_session_id");

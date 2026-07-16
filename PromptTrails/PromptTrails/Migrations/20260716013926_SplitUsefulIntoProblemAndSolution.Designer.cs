@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
-using NpgsqlTypes;
 using Pgvector;
 using PromptTrails.Data;
 
@@ -14,9 +14,11 @@ using PromptTrails.Data;
 namespace PromptTrails.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260716013926_SplitUsefulIntoProblemAndSolution")]
+    partial class SplitUsefulIntoProblemAndSolution
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -148,13 +150,6 @@ namespace PromptTrails.Migrations
                         .HasColumnType("text")
                         .HasColumnName("prompt_uuid");
 
-                    b.Property<NpgsqlTsVector>("SearchVector")
-                        .ValueGeneratedOnAddOrUpdate()
-                        .HasColumnType("tsvector")
-                        .HasColumnName("search_vector")
-                        .HasAnnotation("Npgsql:TsVectorConfig", "english")
-                        .HasAnnotation("Npgsql:TsVectorProperties", new[] { "ProblemEmbeddingText", "SolutionEmbeddingText", "PromptText" });
-
                     b.Property<long>("SessionId")
                         .HasColumnType("bigint")
                         .HasColumnName("session_id");
@@ -195,11 +190,6 @@ namespace PromptTrails.Migrations
                     b.HasIndex("PromptUuid")
                         .IsUnique()
                         .HasDatabaseName("ix_prompt_entries_prompt_uuid");
-
-                    b.HasIndex("SearchVector")
-                        .HasDatabaseName("ix_prompt_entries_search_vector");
-
-                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "GIN");
 
                     b.HasIndex("SessionId")
                         .HasDatabaseName("ix_prompt_entries_session_id");

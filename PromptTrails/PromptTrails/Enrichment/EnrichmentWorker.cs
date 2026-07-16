@@ -92,6 +92,7 @@ public class EnrichmentWorker(
         // network-bound and touch no DbContext, so we run the whole batch concurrently: overflow rows
         // drain in parallel with the slow local rows instead of queuing behind them.
         var routeTally = new Dictionary<string, int>(StringComparer.Ordinal);
+        var entryModel = new Dictionary<long, string>();   // entry id → model that wrote its embed text
         var work = new List<Task<(PromptEntry Entry, EnrichmentResult? Result)>>(batch.Count);
         for (var i = 0; i < batch.Count; i++)
         {
@@ -99,6 +100,7 @@ public class EnrichmentWorker(
             var key = IsEmptyTurn(entry) ? "empty" : RouteKey(i);
             routeTally[key] = routeTally.GetValueOrDefault(key) + 1;
             var summarizer = key == "empty" ? null : Resolve(key);
+            entryModel[entry.Id] = summarizer?.ModelName ?? "(empty-turn skip)";
             work.Add(ComputeSafeAsync(entry, summarizer, embedder, ct));
         }
 
@@ -119,7 +121,21 @@ public class EnrichmentWorker(
             entry.ProblemEmbedding = result.ProblemEmbedding is null ? null : new Vector(result.ProblemEmbedding);
             entry.SolutionEmbeddingText = result.SolutionText;
             entry.SolutionEmbedding = result.SolutionEmbedding is null ? null : new Vector(result.SolutionEmbedding);
+            // Developer-facing provenance: stamp the embedding model only when a vector was actually
+            // produced, so the column and the vectors never disagree (a row with no embedding stays null).
+            var embedded = result.ProblemEmbedding is not null || result.SolutionEmbedding is not null;
+            entry.EmbeddingModel = embedded ? embedder.ModelName : null;
+            // Independent problem/solution usefulness from the summarizer (both 0.0 for empty turns,
+            // which default the scores to 0.0).
+            entry.ProblemUseful = result.Summary.ProblemUseful;
+            entry.SolutionUseful = result.Summary.SolutionUseful;
             entry.EnrichedAt = DateTimeOffset.UtcNow;
+
+            log.LogInformation(
+                "Enriched prompt {Id}: embed text via {SummaryModel}, vectors via {EmbedModel} " +
+                "(problem={HasProblem}, solution={HasSolution}).",
+                entry.Id, entryModel[entry.Id], _opts.Embedding.Model,
+                result.ProblemEmbedding is not null, result.SolutionEmbedding is not null);
         }
 
         await db.SaveChangesAsync(ct);

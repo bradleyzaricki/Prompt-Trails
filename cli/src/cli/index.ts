@@ -2,7 +2,7 @@
 import { Command } from 'commander'
 import { runInit } from './commands/init.js'
 import { runRecord } from './commands/record.js'
-import { runProjectsList, runProjectsAdd, runProjectsRemove } from './commands/projects.js'
+import { runProjectsList, runProjectsAdd, runProjectsRemove, runProjectsRelocate } from './commands/projects.js'
 import { runLog } from './commands/log.js'
 import { runShow } from './commands/show.js'
 import { runStats } from './commands/stats.js'
@@ -42,6 +42,13 @@ program
       .description('Start tracking a project')
       .argument('<path>', 'path to the project directory')
       .action(runProjectsAdd)
+  )
+  .addCommand(
+    new Command('relocate')
+      .description('Point a tracked project at a new directory (defaults to cwd)')
+      .argument('<id>', 'project id')
+      .argument('[path]', 'new project directory (defaults to current directory)')
+      .action(runProjectsRelocate)
   )
   .addCommand(
     new Command('remove')
